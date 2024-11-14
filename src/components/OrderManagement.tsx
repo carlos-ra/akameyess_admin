@@ -51,7 +51,7 @@ interface CartItem {
     description: string;
     price: number;
     images: Record<string, string>;
-  } | null;
+  };
 }
 
 interface OrderWithEmail extends Order {
@@ -79,7 +79,7 @@ const OrderRow = ({ order }: { order: OrderWithEmail }) => {
         console.log('Fetching items for order:', order.id);
         const cartItems = await orderService.getCartItemsByOrderId(order.id);
         console.log('Received items:', cartItems);
-        setItems(cartItems);
+        setItems(cartItems as unknown as CartItem[]);
       }
       setOpen(!open);
     } catch (error) {
@@ -114,7 +114,19 @@ const OrderRow = ({ order }: { order: OrderWithEmail }) => {
           </IconButton>
         </TableCell>
         <TableCell 
-          width="30%" 
+          width="20%" 
+          sx={{ 
+            maxWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={order.id}
+        >
+          {order.id}
+        </TableCell>
+        <TableCell 
+          width="20%" 
           sx={{ 
             maxWidth: 0,
             overflow: 'hidden',
@@ -126,7 +138,7 @@ const OrderRow = ({ order }: { order: OrderWithEmail }) => {
           {order.user_id}
         </TableCell>
         <TableCell 
-          width="25%"
+          width="20%"
           sx={{ 
             maxWidth: 0,
             overflow: 'hidden',
@@ -137,7 +149,7 @@ const OrderRow = ({ order }: { order: OrderWithEmail }) => {
         >
           {order.email || 'N/A'}
         </TableCell>
-        <TableCell width="15%" align="right">
+        <TableCell width="10%" align="right">
           ${Number(order.total_amount).toFixed(2)}
         </TableCell>
         <TableCell width="15%" align="center">
@@ -322,9 +334,10 @@ const OrderManagement = () => {
           <TableHead>
             <TableRow>
               <TableCell width="5%" />
-              <TableCell width="30%">User ID</TableCell>
-              <TableCell width="25%">Email</TableCell>
-              <TableCell width="15%" align="right">Total Amount</TableCell>
+              <TableCell width="20%">Order ID</TableCell>
+              <TableCell width="20%">User ID</TableCell>
+              <TableCell width="20%">Email</TableCell>
+              <TableCell width="10%" align="right">Total Amount</TableCell>
               <TableCell width="15%" align="center">Status</TableCell>
               <TableCell width="10%">Created At</TableCell>
             </TableRow>

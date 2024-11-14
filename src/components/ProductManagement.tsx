@@ -38,7 +38,9 @@ import SearchIcon from '@mui/icons-material/Search';
 import AddIcon from '@mui/icons-material/Add';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 
-interface ProductFormData {
+type ProductImages = Record<string, string>;
+
+interface FormData {
   title: string;
   description: string;
   price: number;
@@ -52,14 +54,11 @@ interface ProductFormData {
 
 const CATEGORIES = ['cosplay', 'beauty'] as const;
 
-interface ProductImages {
-  [key: string]: string;
-}
-
 const parseImages = (images: ProductImages | string[] | null | undefined): string[] => {
   try {
+    if (!images) return [];
     if (Array.isArray(images)) return images;
-    if (typeof images === 'object' && images !== null) {
+    if (typeof images === 'object') {
       return Object.values(images);
     }
     return [];
@@ -76,14 +75,14 @@ const ProductManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     title: '',
     description: '',
     price: 0,
     stock: 0,
     category: 'cosplay',
     sub_category: '',
-    images: [] as string[],
+    images: [],
     ali_express_link: '',
     featured: false
   });
@@ -146,7 +145,7 @@ const ProductManagement = () => {
       stock: product.stock || 0,
       category: product.category,
       sub_category: product.sub_category,
-      images: parseImages(product.images),
+      images: parseImages(typeof product.images === 'string' ? {} : product.images),
       ali_express_link: product.ali_express_link || '',
       featured: product.featured || false
     });

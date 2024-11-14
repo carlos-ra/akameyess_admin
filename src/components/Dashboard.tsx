@@ -93,7 +93,7 @@ const Dashboard = () => {
 
   const getDateFilter = () => {
     const end = new Date();
-    let start = new Date();
+    const start = new Date();
 
     if (dateRange === 'custom' && startDate && endDate) {
       return {
