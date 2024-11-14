@@ -28,12 +28,14 @@ export interface Product {
 export interface Order {
   id: string;
   user_id: string;
+  email?: string;
   total_amount: number;
   status?: string;
   shipping_address?: string;
   created_at?: string;
   updated_at?: string;
   user?: User;
+  items?: (OrderItem & { product: { title: string } })[];
 }
 
 export interface OrderItem {

@@ -11,6 +11,7 @@ import Dashboard from './components/Dashboard';
 import ProductManagement from './components/ProductManagement';
 import CartManagement from './components/CartManagement';
 import Layout from './components/Layout';
+import OrderManagement from './components/OrderManagement';
 import './App.css';
 
 function App() {
@@ -91,6 +92,7 @@ function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="products" element={<ProductManagement />} />
           <Route path="carts" element={<CartManagement />} />
+          <Route path="orders" element={<OrderManagement />} />
         </Route>
       </Routes>
     </Router>

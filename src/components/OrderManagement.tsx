@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../store/store';
-import { setOrders, setLoading, setError } from '../store/slices/ordersSlice';
+import { setOrders, setLoading as setGlobalLoading, setError } from '../store/slices/ordersSlice';
 import { orderService } from '../services/supabase/orders';
-import { Order, OrderItem } from '../services/supabase/types';
+import { Order } from '../services/supabase/types';
 import {
   Box,
   Table,
@@ -23,89 +23,208 @@ import {
   FormControl,
   InputLabel,
   Grid,
+  Stack,
+  Card,
+  CardContent,
+  Avatar,
   Chip,
+  Divider,
+  CircularProgress,
 } from '@mui/material';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import SearchIcon from '@mui/icons-material/Search';
+import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 
-interface OrderRowProps {
-  order: Order & { items: (OrderItem & { product: { title: string } })[] };
+interface CartItem {
+  id: string;
+  user_id: string;
+  order_id: string;
+  product_id: string;
+  quantity: number;
+  price_at_time: number;
+  created_at: string;
+  updated_at: string;
+  product: {
+    id: string;
+    title: string;
+    description: string;
+    price: number;
+    images: Record<string, string>;
+  } | null;
 }
 
-const OrderRow = ({ order }: OrderRowProps) => {
-  const [open, setOpen] = useState(false);
+interface OrderWithEmail extends Order {
+  email?: string;
+}
 
-  const getStatusColor = (status: string) => {
+const OrderRow = ({ order }: { order: OrderWithEmail }) => {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const getStatusColor = (status: string = 'pending') => {
     switch (status.toLowerCase()) {
-      case 'pending':
-        return 'warning';
-      case 'processing':
-        return 'info';
-      case 'completed':
-        return 'success';
-      case 'cancelled':
-        return 'error';
-      default:
-        return 'default';
+      case 'completed': return 'success';
+      case 'processing': return 'info';
+      case 'cancelled': return 'error';
+      default: return 'warning';
     }
   };
 
+  const handleRowClick = async () => {
+    try {
+      if (!open && items.length === 0) {
+        setLoading(true);
+        console.log('Fetching items for order:', order.id);
+        const cartItems = await orderService.getCartItemsByOrderId(order.id);
+        console.log('Received items:', cartItems);
+        setItems(cartItems);
+      }
+      setOpen(!open);
+    } catch (error) {
+      console.error('Error fetching cart items:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+
   return (
     <>
-      <TableRow>
+      <TableRow 
+        hover
+        onClick={handleRowClick}
+        sx={{ cursor: 'pointer' }}
+      >
         <TableCell width="5%">
-          <IconButton size="small" onClick={() => setOpen(!open)}>
-            {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+          <IconButton 
+            size="small" 
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRowClick();
+            }}
+          >
+            {loading ? (
+              <CircularProgress size={20} />
+            ) : (
+              open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />
+            )}
           </IconButton>
         </TableCell>
-        <TableCell width="20%">{order.user?.email || 'Unknown User'}</TableCell>
-        <TableCell width="15%">${order.total_amount.toFixed(2)}</TableCell>
-        <TableCell width="15%">
+        <TableCell 
+          width="30%" 
+          sx={{ 
+            maxWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={order.user_id}
+        >
+          {order.user_id}
+        </TableCell>
+        <TableCell 
+          width="25%"
+          sx={{ 
+            maxWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={order.email || 'N/A'}
+        >
+          {order.email || 'N/A'}
+        </TableCell>
+        <TableCell width="15%" align="right">
+          ${Number(order.total_amount).toFixed(2)}
+        </TableCell>
+        <TableCell width="15%" align="center">
           <Chip 
             label={order.status} 
-            color={getStatusColor(order.status || '')}
+            color={getStatusColor(order.status)}
             size="small"
           />
         </TableCell>
-        <TableCell width="25%">{order.shipping_address}</TableCell>
-        <TableCell width="20%">
+        <TableCell width="10%">
           {new Date(order.created_at || '').toLocaleDateString()}
         </TableCell>
       </TableRow>
-      <TableRow>
-        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
-          <Collapse in={open} timeout="auto" unmountOnExit>
-            <Box sx={{ margin: 1 }}>
-              <Typography variant="h6" gutterBottom component="div">
-                Order Items
-              </Typography>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell width="40%">Product</TableCell>
-                    <TableCell width="20%">Quantity</TableCell>
-                    <TableCell width="20%">Price at Time</TableCell>
-                    <TableCell width="20%">Subtotal</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {order.items.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{item.product.title}</TableCell>
-                      <TableCell>{item.quantity}</TableCell>
-                      <TableCell>${item.price_at_time.toFixed(2)}</TableCell>
-                      <TableCell>
-                        ${(item.quantity * item.price_at_time).toFixed(2)}
-                      </TableCell>
-                    </TableRow>
+      {items.length > 0 && (
+        <TableRow>
+          <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
+            <Collapse in={open} timeout="auto" unmountOnExit>
+              <Box sx={{ margin: 2, bgcolor: 'grey.50', p: 2, borderRadius: 1 }}>
+                <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+                  <ShoppingCartIcon color="primary" />
+                  <Typography variant="h6" component="div">
+                    Order Items ({totalItems})
+                  </Typography>
+                </Stack>
+                <Grid container spacing={2}>
+                  {items.map((item) => (
+                    <Grid item xs={12} md={6} key={item.id}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Grid container spacing={2} alignItems="center">
+                            <Grid item xs={3}>
+                              <Avatar
+                                variant="rounded"
+                                src={Object.values(item.product?.images || {})[0] || ''}
+                                alt={item.product?.title || 'Unknown Product'}
+                                sx={{ 
+                                  width: 80, 
+                                  height: 80,
+                                  bgcolor: 'grey.200'
+                                }}
+                              >
+                                {!item.product?.images && 'No Image'}
+                              </Avatar>
+                            </Grid>
+                            <Grid item xs={9}>
+                              <Stack spacing={1}>
+                                <Typography variant="subtitle1" component="div">
+                                  {item.product?.title || 'Unknown Product'}
+                                </Typography>
+                                <Stack
+                                  direction="row"
+                                  justifyContent="space-between"
+                                  alignItems="center"
+                                >
+                                  <Typography variant="body2" color="text.secondary">
+                                    Quantity: {item.quantity}
+                                  </Typography>
+                                  <Typography variant="body2" color="text.secondary">
+                                    Price: ${Number(item.price_at_time).toFixed(2)}
+                                  </Typography>
+                                </Stack>
+                                <Divider />
+                                <Stack
+                                  direction="row"
+                                  justifyContent="space-between"
+                                  alignItems="center"
+                                >
+                                  <Typography variant="subtitle2" color="primary">
+                                    Subtotal
+                                  </Typography>
+                                  <Typography variant="subtitle2" color="primary">
+                                    ${(Number(item.quantity) * Number(item.price_at_time)).toFixed(2)}
+                                  </Typography>
+                                </Stack>
+                              </Stack>
+                            </Grid>
+                          </Grid>
+                        </CardContent>
+                      </Card>
+                    </Grid>
                   ))}
-                </TableBody>
-              </Table>
-            </Box>
-          </Collapse>
-        </TableCell>
-      </TableRow>
+                </Grid>
+              </Box>
+            </Collapse>
+          </TableCell>
+        </TableRow>
+      )}
     </>
   );
 };
@@ -114,44 +233,34 @@ const OrderManagement = () => {
   const dispatch = useDispatch();
   const orders = useSelector((state: RootState) => state.orders.items);
   const [searchTerm, setSearchTerm] = useState('');
+  const [emailSearchTerm, setEmailSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [dateSort, setDateSort] = useState<'newest' | 'oldest'>('newest');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-
-  const filteredAndSortedOrders = orders
-    .filter(order => {
-      const matchesSearch = order.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          order.shipping_address?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
-      const orderDate = new Date(order.created_at || '');
-      const isAfterStart = !startDate || orderDate >= new Date(startDate);
-      const isBeforeEnd = !endDate || orderDate <= new Date(endDate);
-      
-      return matchesSearch && matchesStatus && isAfterStart && isBeforeEnd;
-    })
-    .sort((a, b) => {
-      const dateA = new Date(a.created_at || '').getTime();
-      const dateB = new Date(b.created_at || '').getTime();
-      return dateSort === 'newest' ? dateB - dateA : dateA - dateB;
-    });
-
-  const fetchOrders = async () => {
-    try {
-      dispatch(setLoading(true));
-      const ordersData = await orderService.getAllOrders();
-      dispatch(setOrders(ordersData));
-    } catch (error) {
-      console.error('Error fetching orders:', error);
-      dispatch(setError('Failed to fetch orders'));
-    } finally {
-      dispatch(setLoading(false));
-    }
-  };
 
   useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        dispatch(setGlobalLoading(true));
+        const ordersData = await orderService.getAllOrders();
+        console.log('Orders fetched:', ordersData);
+        dispatch(setOrders(ordersData));
+      } catch (error) {
+        console.error('Error fetching orders:', error);
+        dispatch(setError('Failed to fetch orders'));
+      } finally {
+        dispatch(setGlobalLoading(false));
+      }
+    };
+
     fetchOrders();
-  }, []);
+  }, [dispatch]);
+
+  const filteredOrders = orders.filter(order => {
+    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+    const matchesSearch = order.user_id.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesEmail = !emailSearchTerm || 
+      (order as OrderWithEmail).email?.toLowerCase().includes(emailSearchTerm.toLowerCase()) || false;
+    return matchesStatus && matchesSearch && matchesEmail;
+  });
 
   return (
     <Box>
@@ -160,10 +269,10 @@ const OrderManagement = () => {
       </Typography>
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={3}>
+        <Grid item xs={12} md={4}>
           <TextField
             fullWidth
-            placeholder="Search by email or address..."
+            placeholder="Search by user ID..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             InputProps={{
@@ -175,7 +284,22 @@ const OrderManagement = () => {
             }}
           />
         </Grid>
-        <Grid item xs={12} md={2}>
+        <Grid item xs={12} md={4}>
+          <TextField
+            fullWidth
+            placeholder="Search by email..."
+            value={emailSearchTerm}
+            onChange={(e) => setEmailSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+          />
+        </Grid>
+        <Grid item xs={12} md={4}>
           <FormControl fullWidth>
             <InputLabel>Status</InputLabel>
             <Select
@@ -191,55 +315,22 @@ const OrderManagement = () => {
             </Select>
           </FormControl>
         </Grid>
-        <Grid item xs={12} md={2}>
-          <FormControl fullWidth>
-            <InputLabel>Sort by Date</InputLabel>
-            <Select
-              value={dateSort}
-              label="Sort by Date"
-              onChange={(e) => setDateSort(e.target.value as 'newest' | 'oldest')}
-            >
-              <MenuItem value="newest">Newest First</MenuItem>
-              <MenuItem value="oldest">Oldest First</MenuItem>
-            </Select>
-          </FormControl>
-        </Grid>
-        <Grid item xs={12} md={2.5}>
-          <TextField
-            fullWidth
-            type="date"
-            label="Start Date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-          />
-        </Grid>
-        <Grid item xs={12} md={2.5}>
-          <TextField
-            fullWidth
-            type="date"
-            label="End Date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-          />
-        </Grid>
       </Grid>
 
       <TableContainer component={Paper}>
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell />
-              <TableCell>Customer</TableCell>
-              <TableCell>Total Amount</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Shipping Address</TableCell>
-              <TableCell>Created At</TableCell>
+              <TableCell width="5%" />
+              <TableCell width="30%">User ID</TableCell>
+              <TableCell width="25%">Email</TableCell>
+              <TableCell width="15%" align="right">Total Amount</TableCell>
+              <TableCell width="15%" align="center">Status</TableCell>
+              <TableCell width="10%">Created At</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredAndSortedOrders.map((order) => (
+            {filteredOrders.map((order) => (
               <OrderRow key={order.id} order={order} />
             ))}
           </TableBody>

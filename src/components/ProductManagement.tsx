@@ -12,30 +12,30 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   Typography,
   IconButton,
-  InputAdornment,
   Grid,
-  ImageList,
-  ImageListItem,
-  ImageListItemBar,
+  Card,
+  CardContent,
+  CardMedia,
+  CardActions,
+  InputAdornment,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Switch,
+  Chip,
+  Stack,
   FormControlLabel,
+  Switch,
+  ImageList,
+  ImageListItem,
+  ImageListItemBar,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SearchIcon from '@mui/icons-material/Search';
+import AddIcon from '@mui/icons-material/Add';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 
 interface ProductFormData {
@@ -52,16 +52,19 @@ interface ProductFormData {
 
 const CATEGORIES = ['cosplay', 'beauty'] as const;
 
-const parseImages = (images: any): string[] => {
+interface ProductImages {
+  [key: string]: string;
+}
+
+const parseImages = (images: ProductImages | string[] | null | undefined): string[] => {
   try {
     if (Array.isArray(images)) return images;
     if (typeof images === 'object' && images !== null) {
-      // Convert object format to array
-      return Object.values(images).filter(url => typeof url === 'string');
+      return Object.values(images);
     }
     return [];
   } catch (e) {
-    console.error('Error parsing images:', e, images);
+    console.error('Error parsing images:', e);
     return [];
   }
 };
@@ -70,26 +73,32 @@ const ProductManagement = () => {
   const dispatch = useDispatch();
   const products = useSelector((state: RootState) => state.products.items);
   const [open, setOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [formData, setFormData] = useState<ProductFormData>({
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [formData, setFormData] = useState({
     title: '',
     description: '',
     price: 0,
     stock: 0,
-    category: '',
+    category: 'cosplay',
     sub_category: '',
-    images: [],
+    images: [] as string[],
     ali_express_link: '',
     featured: false
   });
 
   const [imageUrl, setImageUrl] = useState('');
 
-  const filteredProducts = products.filter(product => 
-    product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProducts = products.filter(product => {
+    const matchesSearch = 
+      product.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (product.description?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+    
+    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
+
+    return matchesSearch && matchesCategory;
+  });
 
   const resetForm = () => {
     setFormData({
@@ -97,7 +106,7 @@ const ProductManagement = () => {
       description: '',
       price: 0,
       stock: 0,
-      category: '',
+      category: 'cosplay',
       sub_category: '',
       images: [],
       ali_express_link: '',
@@ -157,7 +166,7 @@ const ProductManagement = () => {
         sub_category: formData.sub_category,
         stock: formData.stock,
         featured: formData.featured,
-        ali_express_link: formData.ali_express_link || null
+        ali_express_link: formData.ali_express_link || undefined
       };
 
       if (editingProduct) {
@@ -213,161 +222,128 @@ const ProductManagement = () => {
     <Box>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4">Products</Typography>
-        <Button variant="contained" onClick={() => setOpen(true)}>
+        <Button 
+          variant="contained" 
+          onClick={() => setOpen(true)}
+          startIcon={<AddIcon />}
+        >
           Add Product
         </Button>
       </Box>
 
-      <TextField
-        fullWidth
-        margin="normal"
-        placeholder="Search products by title or description..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon />
-            </InputAdornment>
-          ),
-        }}
-        sx={{ mb: 3 }}
-      />
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={8}>
+          <TextField
+            fullWidth
+            placeholder="Search products by title or description..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+          />
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <FormControl fullWidth>
+            <InputLabel>Category</InputLabel>
+            <Select
+              value={selectedCategory}
+              label="Category"
+              onChange={(e) => setSelectedCategory(e.target.value)}
+            >
+              <MenuItem value="all">All Categories</MenuItem>
+              {CATEGORIES.map((category) => (
+                <MenuItem key={category} value={category}>
+                  {category.charAt(0).toUpperCase() + category.slice(1)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Grid>
+      </Grid>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell width="80px">Image</TableCell>
-              <TableCell 
-                width="20%" 
-                sx={{ 
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  maxWidth: '200px'
+      <Grid container spacing={3}>
+        {filteredProducts.map((product) => (
+          <Grid item xs={12} sm={6} md={4} key={product.id}>
+            <Card>
+              <CardMedia
+                component="img"
+                height="200"
+                image={Object.values(product.images)[0] || 'https://via.placeholder.com/200?text=No+Image'}
+                alt={product.title}
+                sx={{ objectFit: 'cover' }}
+                onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                  e.currentTarget.src = 'https://via.placeholder.com/200?text=Error+Loading+Image';
                 }}
-              >
-                Title
-              </TableCell>
-              <TableCell width="10%">Price</TableCell>
-              <TableCell width="8%">Stock</TableCell>
-              <TableCell width="12%">Category</TableCell>
-              <TableCell width="12%">Sub Category</TableCell>
-              <TableCell width="20%">Description</TableCell>
-              <TableCell width="8%">Featured</TableCell>
-              <TableCell width="10%" align="center">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredProducts.map((product: Product) => (
-              <TableRow key={product.id}>
-                <TableCell sx={{ width: '80px', padding: '8px' }}>
-                  <Box
-                    component="img"
+              />
+              <CardContent>
+                <Stack spacing={1}>
+                  <Typography variant="h6" noWrap title={product.title}>
+                    {product.title}
+                  </Typography>
+                  <Typography 
+                    variant="body2" 
+                    color="text.secondary"
                     sx={{
-                      width: '60px',
-                      height: '60px',
-                      objectFit: 'cover',
-                      borderRadius: 1,
-                      display: 'block',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
                     }}
-                    src={(() => {
-                      const parsedImages = parseImages(product.images);
-                      return parsedImages.length > 0 
-                        ? parsedImages[0] 
-                        : 'https://via.placeholder.com/60?text=No+Image';
-                    })()}
-                    alt={product.title}
-                    onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-                      const target = e.currentTarget;
-                      console.error('Image load error:', target.src);
-                      target.src = 'https://via.placeholder.com/60?text=Error';
-                    }}
-                  />
-                </TableCell>
-                <TableCell
-                  sx={{
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    maxWidth: '200px',
-                    '&:hover': {
-                      overflow: 'visible',
-                      whiteSpace: 'normal',
-                      backgroundColor: 'background.paper',
-                      position: 'relative',
-                      zIndex: 1,
-                    }
-                  }}
-                  title={product.title}
-                >
-                  {product.title}
-                </TableCell>
-                <TableCell>${product.price.toFixed(2)}</TableCell>
-                <TableCell>{product.stock}</TableCell>
-                <TableCell
-                  sx={{
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    maxWidth: '150px'
-                  }}
-                  title={product.category}
-                >
-                  {product.category}
-                </TableCell>
-                <TableCell
-                  sx={{
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    maxWidth: '150px'
-                  }}
-                  title={product.sub_category}
-                >
-                  {product.sub_category}
-                </TableCell>
-                <TableCell
-                  sx={{
-                    maxWidth: '300px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    '&:hover': {
-                      overflow: 'visible',
-                      whiteSpace: 'normal',
-                      backgroundColor: 'background.paper',
-                      position: 'relative',
-                      zIndex: 1,
-                    }
-                  }}
-                  title={product.description}
-                >
-                  {product.description}
-                </TableCell>
-                <TableCell>{product.featured ? 'Yes' : 'No'}</TableCell>
-                <TableCell align="center">
-                  <IconButton
-                    color="primary"
-                    size="small"
-                    onClick={() => handleEdit(product)}
                   >
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    color="error"
-                    size="small"
-                    onClick={() => handleDelete(product.id)}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                    {product.description}
+                  </Typography>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Typography variant="h6" color="primary">
+                      ${product.price.toFixed(2)}
+                    </Typography>
+                    <Chip 
+                      label={`Stock: ${product.stock || 0}`}
+                      color={product.stock && product.stock > 0 ? 'success' : 'error'}
+                      size="small"
+                    />
+                  </Stack>
+                  <Stack direction="row" spacing={1}>
+                    <Chip 
+                      label={product.category}
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                    />
+                    <Chip 
+                      label={product.sub_category}
+                      size="small"
+                      color="secondary"
+                      variant="outlined"
+                    />
+                  </Stack>
+                </Stack>
+              </CardContent>
+              <CardActions sx={{ justifyContent: 'flex-end' }}>
+                <IconButton
+                  color="primary"
+                  size="small"
+                  onClick={() => handleEdit(product)}
+                >
+                  <EditIcon />
+                </IconButton>
+                <IconButton
+                  color="error"
+                  size="small"
+                  onClick={() => handleDelete(product.id)}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </CardActions>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
 
       <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
         <DialogTitle>
@@ -487,7 +463,9 @@ const ProductManagement = () => {
                 control={
                   <Switch
                     checked={formData.featured}
-                    onChange={(e) => setFormData({ ...formData, featured: e.target.checked })}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                      setFormData({ ...formData, featured: e.target.checked })
+                    }
                     color="primary"
                   />
                 }

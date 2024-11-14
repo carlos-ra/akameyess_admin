@@ -1,51 +1,100 @@
-import { supabase } from '../../config/supabase';
+import { getSupabaseClient } from '../../config/supabase';
 import { Order } from './types';
 
 export const orderService = {
   async getAllOrders(): Promise<Order[]> {
-    const { data, error } = await supabase
+    const supabase = await getSupabaseClient();
+    
+    // Get all orders with user emails
+    const { data: orders, error: ordersError } = await supabase
       .from('orders')
-      .select(`
-        *,
-        user:users (*),
-        items:order_items (
-          *,
-          product:products (*)
-        )
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    return data;
+    if (ordersError) {
+      console.error('Error fetching orders:', ordersError);
+      throw ordersError;
+    }
+
+    if (!orders) {
+      return [];
+    }
+
+    // Get user emails
+    const ordersWithEmails = await Promise.all(orders.map(async (order) => {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('email')
+        .eq('id', order.user_id)
+        .single();
+
+      return {
+        ...order,
+        email: userData?.email
+      };
+    }));
+
+    return ordersWithEmails;
   },
 
-  async updateOrderStatus(orderId: string, status: string): Promise<Order> {
-    const { data, error } = await supabase
-      .from('orders')
-      .update({ status })
-      .eq('id', orderId)
-      .select()
-      .single();
+  async getCartItemsByOrderId(orderId: string) {
+    const supabase = await getSupabaseClient();
+    
+    console.log('Starting to fetch cart items for order:', orderId);
 
-    if (error) throw error;
-    return data;
-  },
-
-  async getOrderById(id: string): Promise<Order> {
-    const { data, error } = await supabase
-      .from('orders')
+    // Direct query to cart_items with the specific order_id
+    const { data: items, error: itemsError } = await supabase
+      .from('cart_items')
       .select(`
-        *,
-        user:users (*),
-        items:order_items (
-          *,
-          product:products (*)
+        id,
+        user_id,
+        order_id,
+        product_id,
+        quantity,
+        price_at_time,
+        created_at,
+        updated_at,
+        product:products (
+          id,
+          title,
+          description,
+          price,
+          images
         )
       `)
-      .eq('id', id)
-      .single();
+      .eq('order_id', orderId);
+
+    if (itemsError) {
+      console.error('Error fetching cart items:', itemsError);
+      throw itemsError;
+    }
+
+    // Log the raw response for debugging
+    console.log('Raw cart items:', items);
+
+    // Transform the data to match the expected type
+    const transformedItems = items?.map(item => ({
+      ...item,
+      product: item.product || {
+        id: '',
+        title: 'Unknown Product',
+        description: '',
+        price: 0,
+        images: {}
+      }
+    })) || [];
+
+    console.log('Transformed items:', transformedItems);
+    return transformedItems;
+  },
+
+  async updateOrderStatus(id: string, status: string): Promise<void> {
+    const supabase = await getSupabaseClient();
+    const { error } = await supabase
+      .from('orders')
+      .update({ status })
+      .eq('id', id);
 
     if (error) throw error;
-    return data;
   }
 }; 
